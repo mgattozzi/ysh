@@ -1,0 +1,13 @@
+cargo-features=["edition"]
+
+[package]
+name = "ysh"
+version = "0.1.0"
+authors = ["Michael Gattozzi <mgattozzi@gmail.com>"]
+edition = '2018'
+
+[dependencies]
+failure = "*"
+lazy_static = "*"
+termion = "*"
+libc = "*"
