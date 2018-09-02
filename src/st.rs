@@ -2,14 +2,11 @@
 use std::{
     fs::{
         self,
-        File,
     },
     env,
     sync::RwLock,
     io::{
-        BufReader,
         StdoutLock,
-        BufRead,
     },
 };
 use super::terminal;
@@ -61,15 +58,31 @@ pub fn hostname() -> Result<String, Error> {
     Ok(fs::read_to_string("/etc/hostname")?.trim().into())
 }
 
+/// Gets the username that launched the shell.
+///
+/// This function will fail if:
+/// - the current uid as returned by `libc::getuid()` does not have a valid
+///     entry in the system user registry (unlikely)
+/// - the user structure for the current uid has a nullpointer for the name
+///     field (even more unlikely)
+/// - the text behind the user structure's name pointer is invalid UTF-8 (less
+///     unlikely)
+#[cfg(target_family = "unix")]
 pub fn user() -> Result<String, Error> {
+    //  Unixy libc represent users as uid tokens (secretly u32, but details)
     let uid = unsafe { libc::getuid() };
-    let mut buf = BufReader::new(File::open("/etc/passwd")?);
-    let mut line = String::new();
-    while buf.read_line(&mut line)? > 0 {
-        if line.contains(&uid.to_string()) {
-            return Ok(line.split(':').next().unwrap().into())
-        }
-        line.clear();
+    let passwd = unsafe { libc::getpwuid(uid) };
+    if passwd.is_null() {
+        bail!("User for ID {} not found in system registry!", uid);
     }
-    bail!("User not found in /etc/passwd")
+    let name = unsafe { (*passwd).pw_name };
+    if name.is_null() {
+        bail!("Username string for ID {} is a null pointer!", uid);
+    }
+    unsafe { std::ffi::CStr::from_ptr(name) }
+        .to_str()
+        .map(Into::into)
+        .or_else(|_| bail!("Username is not UTF-8"))
 }
+
+// TODO(mgattozzi): Implement a version of user() for winapi
