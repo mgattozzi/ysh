@@ -1,22 +1,25 @@
 //! Functions and types dealing with the `State` of the shell
 use std::{
-    fs::{
-        self,
-    },
     env,
     sync::RwLock,
-    io::{
-        StdoutLock,
-    },
 };
-use super::terminal;
-use termion::raw::RawTerminal;
+use crossterm::Screen;
+use super::term;
 use failure::{
     bail,
     format_err,
     Error,
 };
 use lazy_static::lazy_static;
+
+#[cfg(unix)]
+use std::fs;
+
+#[cfg(windows)]
+use winapi::um::winbase::{
+    GetComputerNameA,
+    GetUserNameA,
+};
 
 lazy_static! {
     pub static ref STATE: State = State::new();
@@ -34,7 +37,7 @@ impl State {
     }
 }
 
-pub fn init(stdout: &mut RawTerminal<StdoutLock>) -> Result<(), Error> {
+pub fn init(mut screen: &mut Screen) -> Result<(), Error> {
     let host = hostname()?;
     let user = user()?;
     env::set_var("HOST", &host);
@@ -49,11 +52,12 @@ pub fn init(stdout: &mut RawTerminal<StdoutLock>) -> Result<(), Error> {
         prompt.push_str(" % ");
     }
 
-    terminal::reset(stdout)?;
+    term::reset(&mut screen)?;
 
     Ok(())
 }
 
+#[cfg(target_family = "unix")]
 pub fn hostname() -> Result<String, Error> {
     Ok(fs::read_to_string("/etc/hostname")?.trim().into())
 }
@@ -85,4 +89,52 @@ pub fn user() -> Result<String, Error> {
         .or_else(|_| bail!("Username is not UTF-8"))
 }
 
-// TODO(mgattozzi): Implement a version of user() for winapi
+
+#[cfg(target_family = "windows")]
+pub fn hostname() -> Result<String, Error> {
+    // We want the Max length for NetBIOS names which is 15 chars
+    // https://docs.microsoft.com/en-us/windows/desktop/sysinfo/computer-names
+    const MAX_COMPUTERNAME_LENGTH: usize = 15;
+    // The buffer needs to hold the constant above + 1 chars
+    // https://docs.microsoft.com/en-us/windows/desktop/api/winbase/nf-winbase-getcomputernamea
+    const LENGTH: usize = MAX_COMPUTERNAME_LENGTH + 1;
+    // Create a zeroed out buffer. Windows uses i8 to represent chars
+    let mut buffer = [0 as i8; LENGTH];
+    unsafe {
+        // Make the call, a value of 0 means it was unable to get the Hostname, we should
+        // fail the program here with an error message
+        if GetComputerNameA(buffer.as_mut_ptr(), &mut (LENGTH as u32)) == 0 {
+            bail!("Unable to get hostname from call to GetComputerNameA in Windows API")
+        };
+    }
+    // winapi uses C Strings but we want it without all the null chars so we convert the
+    // buffer into a CStr and then into a proper Rust String failing if it's not UTF-8
+    unsafe { std::ffi::CStr::from_ptr(buffer.as_ptr()) }
+        .to_str()
+        .map(Into::into)
+        .or_else(|_| bail!("Hostname is not UTF-8"))
+}
+#[cfg(target_family = "windows")]
+pub fn user() -> Result<String, Error> {
+    // We want to have this value UNLEN for below. UNLEN is defined here as 256
+    // https://msdn.microsoft.com/en-us/library/cc761107.aspx
+    const UNLEN: usize = 256;
+    // The buffer needs to hold the constant above + 1 chars
+    // https://docs.microsoft.com/en-us/windows/desktop/api/winbase/nf-winbase-getusernamea
+    const LENGTH: usize = UNLEN + 1;
+    // Create a zeroed out buffer. Windows uses i8 to represent chars
+    let mut buffer = [0 as i8; LENGTH];
+    unsafe {
+        // Make the call, a value of 0 means it was unable to get the username, we should
+        // fail the program here with an error message
+        if GetUserNameA(buffer.as_mut_ptr(), &mut (LENGTH as u32)) == 0 {
+            bail!("Unable to get username from call to GetUserNameA in Windows API")
+        };
+    }
+    // winapi uses C Strings but we want it without all the null chars so we convert the
+    // buffer into a CStr and then into a proper Rust String failing if it's not UTF-8
+    unsafe { std::ffi::CStr::from_ptr(buffer.as_ptr()) }
+        .to_str()
+        .map(Into::into)
+        .or_else(|_| bail!("Username is not UTF-8"))
+}
