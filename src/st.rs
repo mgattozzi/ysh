@@ -57,9 +57,55 @@ pub fn init(mut screen: &mut Screen) -> Result<(), Error> {
     Ok(())
 }
 
+/// Gets the hostname of the machine running the shell.
 #[cfg(target_family = "unix")]
 pub fn hostname() -> Result<String, Error> {
-    Ok(fs::read_to_string("/etc/hostname")?.trim().into())
+    let mut buf: Vec<u8> = Vec::with_capacity(32);
+    //  The linter doesn't set any targets, and so is unable to see that we are,
+    //  in fact, assigning to this.
+    #[allow(unused_mut)]
+    let mut res: libc::c_int;
+    loop {
+        //  When the buffer gets ridiculously large, abort
+        //  (note: POSIX currently says the maximum is 256)
+        if buf.len() > 1024 {
+            bail!("Hostname is too large!");
+        }
+        //  C has a bad API for buffers. Get the pointer and capacity of our Vec
+        let (ptr, cap) = (buf.as_mut_ptr() as *mut libc::c_char, buf.capacity());
+        //  and call gethostname so it can write into it.
+        res = unsafe { libc::gethostname(ptr, cap) };
+
+        //  gethostname returns -1 on failure and sets errno, instead of
+        //  returning the error directly.
+        if res == -1 {
+            //  cfg can't be placed on if-statements, so the errno checks are
+            //  wrapped in blocks.
+            //  this is only a problem because linux and mac libc have different
+            //  functions for finding errno
+            #[cfg(target_os = "linux")] {
+            if unsafe { *libc::__errno_location() } == libc::ENAMETOOLONG {
+                buf.reserve(buf.capacity());
+                continue;
+            } }
+            #[cfg(target_os = "mac")] {
+            if unsafe { *libc::__error() } == libc::ENAMETOOLONG {
+                buf.reserve(buf.capacity());
+                continue;
+            } }
+            unreachable!("gethostname can only fail with ENAMETOOLONG");
+        }
+        //  gethostname has now succeeded! buf holds the contents of a CStr.
+        //  This code will attempt to reinterpret buf as a String in place, so
+        //  that no reallocation is required. Performance!
+        break unsafe {std::ffi::CStr::from_ptr(ptr) }.to_str()
+            .map(|cs| unsafe {
+                buf.set_len(cs.len());
+                buf.shrink_to_fit();
+                String::from_utf8_unchecked(buf)
+            })
+            .or_else(|_| bail!("The hostname is invalid UTF-8"));
+    }
 }
 
 /// Gets the username that launched the shell.
@@ -75,17 +121,26 @@ pub fn hostname() -> Result<String, Error> {
 pub fn user() -> Result<String, Error> {
     //  Unixy libc represent users as uid tokens (secretly u32, but details)
     let uid = unsafe { libc::getuid() };
+    //  Get a pointer into thread-local storage for the user structure matching
+    //  the obtained uid.
     let passwd = unsafe { libc::getpwuid(uid) };
+    //  Abort if nullptr
     if passwd.is_null() {
         bail!("User for ID {} not found in system registry!", uid);
     }
+    //  Get the name member, which is *const c_char
     let name = unsafe { (*passwd).pw_name };
+    //  Abort if that is nullptr
     if name.is_null() {
         bail!("Username string for ID {} is a null pointer!", uid);
     }
+    //  Read the data behind the pointer as a CStr
     unsafe { std::ffi::CStr::from_ptr(name) }
+        //  Attempt to read it as UTF-8
         .to_str()
+        //  And take ownership of it as a String if it is
         .map(Into::into)
+        //  Or fail if it is not
         .or_else(|_| bail!("Username is not UTF-8"))
 }
 
