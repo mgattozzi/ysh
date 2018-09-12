@@ -116,7 +116,7 @@ dependencies = [
 [[package]]
 name = "nom"
 version = "4.0.0"
-source = "git+https://github.com/myrrlyn/nom?branch=2018-edition#77a9b16d3d64f18e0a7b1b74374ee469665b674a"
+source = "git+https://github.com/myrrlyn/nom?branch=2018-edition#f6b927b097dd86dbb7237c258da649030431edd2"
 dependencies = [
  "memchr 2.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]

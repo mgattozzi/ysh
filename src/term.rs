@@ -11,6 +11,7 @@ use crossterm::{
     terminal::terminal,
     terminal::ClearType,
 };
+use std::fmt;
 use std::io::Write;
 use std::str;
 
@@ -37,7 +38,7 @@ pub fn backspace(screen: &mut Screen) -> Result<(), Error> {
     Ok(())
 }
 
-pub fn not_found(screen: &mut Screen, command: &str) -> Result<(), Error> {
+pub fn not_found<C: fmt::Display>(screen: &mut Screen, command: &C) -> Result<(), Error> {
     write!(screen, "ysh: command not found: {}", command)?;
     newline(screen)?;
     screen.flush()?;

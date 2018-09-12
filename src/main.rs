@@ -13,12 +13,15 @@ use crossterm::{
 };
 use std::io::Write;
 use duct::cmd;
+
+mod ast;
 mod term;
 mod st;
 mod parse;
 
-use self::parse::{
-    span,
+use self::{
+    parse::Parse,
+    ast::{Cmd, Builtin},
 };
 
 fn main() {
@@ -52,34 +55,17 @@ fn run(mut screen: Screen) -> Result<(), Error> {
                 }
             },
             '\u{000D}' /* Enter */ => {
-                match str::from_utf8(&line)? {
-                    "" => continue,
-                    "clear" => term::reset(&mut screen)?,
-                    command => {
+                match Cmd::parse_from(str::from_utf8(&line)?) {
+
+                    Err(e) => {
+                        // TODO(eliza): handle parse errors!
+                        continue;
+                    },
+                    Ok(Cmd::Builtin(Builtin::Clear)) => term::reset(&mut screen)?,
+                    Ok(Cmd::Builtin(Builtin::Cd(_))) => unimplemented!("cd doesnt work yet"),
+                    Ok(Cmd::Invoke(ref c)) => {
                         term::newline(&mut screen)?;
-                        //  args is a collection of &'line str snippets --
-                        //  pointers into the line buffer above
-                        let mut args: Vec<&str> = Vec::new();
-                        //  The command binding is used below, so we need a
-                        //  separate cursor for the tokenizing
-                        let mut text: &str = command;
-                        while text.len() > 0 {
-                            //  Use the span tokenizer to get a snippet
-                            let (rest, span) = span(text.into())
-                                //  Suppress the errors for now. May be worth
-                                //  investigating so that the shell can repont
-                                //  invalid syntax?
-                                .map_err(|_| failure::format_err!("Invalid text"))?;
-                                //  rest and span are CompleteStr, which implements
-                                //  Deref down to &str.
-                                args.push(*span);
-                                text = *rest;
-                        }
-                        if args.is_empty() {
-                            screen.flush()?;
-                            continue;
-                        }
-                        cmd(args[0], &args[1..])
+                        cmd(c.command, c.args.clone())
                             .unchecked()
                             .stdout_capture()
                             .stderr_capture()
@@ -93,7 +79,7 @@ fn run(mut screen: Screen) -> Result<(), Error> {
                                 }
                                 Ok(())
                             })
-                            .or_else(|_: Error| term::not_found(&mut screen, command))?;
+                            .or_else(|_: Error| term::not_found(&mut screen, &c.command.to_string_lossy()))?;
 
                         term::prompt(&mut screen)?;
                     }
