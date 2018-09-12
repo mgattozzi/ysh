@@ -10,6 +10,11 @@ lazy_static = "1.1"
 crossterm = "0.4"
 duct = "0.11"
 
+[dependencies.nom]
+version = "4"
+git = "https://github.com/myrrlyn/nom"
+branch = "2018-edition"
+
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 

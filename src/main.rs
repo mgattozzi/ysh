@@ -1,3 +1,5 @@
+#![feature(crate_visibility_modifier)]
+
 use std::{
     str,
     process::exit,
@@ -13,7 +15,11 @@ use std::io::Write;
 use duct::cmd;
 mod term;
 mod st;
+mod parse;
 
+use self::parse::{
+    span,
+};
 
 fn main() {
     // Put it in raw mode
@@ -51,13 +57,28 @@ fn run(mut screen: Screen) -> Result<(), Error> {
                     "clear" => term::reset(&mut screen)?,
                     command => {
                         term::newline(&mut screen)?;
-                        // This will mess up when doing something like:
-                        // echo "hi hello"
-                        // which will be [echo, "hi, hello"] so need to make a
-                        // parse_command function that can handle this stuff better
-                        let args = command.split_whitespace().collect::<Vec<&str>>();
-                        if args.len() == 0 { screen.flush()?; continue; }
-
+                        //  args is a collection of &'line str snippets --
+                        //  pointers into the line buffer above
+                        let mut args: Vec<&str> = Vec::new();
+                        //  The command binding is used below, so we need a
+                        //  separate cursor for the tokenizing
+                        let mut text: &str = command;
+                        while text.len() > 0 {
+                            //  Use the span tokenizer to get a snippet
+                            let (rest, span) = span(text.into())
+                                //  Suppress the errors for now. May be worth
+                                //  investigating so that the shell can repont
+                                //  invalid syntax?
+                                .map_err(|_| failure::format_err!("Invalid text"))?;
+                                //  rest and span are CompleteStr, which implements
+                                //  Deref down to &str.
+                                args.push(*span);
+                                text = *rest;
+                        }
+                        if args.is_empty() {
+                            screen.flush()?;
+                            continue;
+                        }
                         cmd(args[0], &args[1..])
                             .unchecked()
                             .stdout_capture()
