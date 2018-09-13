@@ -2,6 +2,8 @@
 use std::{
     env,
     fmt::Write,
+    io,
+    path::{Path, PathBuf},
 };
 use crossterm::Screen;
 use super::term::Term;
@@ -20,32 +22,39 @@ use winapi::um::winbase::{
     GetUserNameA,
 };
 
+#[derive(Default)]
 pub struct State {
-    pub prompt: String,
+    pub pwd: PathBuf,
+    pub host: String,
+    pub user: String,
 }
 
 impl State {
-    pub fn new() -> Self {
-        Self {
-            prompt: String::new(),
-        }
-    }
 
-
-    pub fn init(&mut self, screen: &mut Screen) -> Result<(), Error> {
+    pub fn init(self, screen: &mut Screen) -> Result<Self, Error> {
         let host = hostname()?;
         let user = user()?;
         env::set_var("HOST", &host);
         env::set_var("USER", &user);
-        write!(
-            &mut self.prompt,
-            "{user}@{host} % ",
-            user = user,
-            host = host,
-        )?;
 
-        screen.reset(&self.prompt)?;
+        let pwd = env::current_dir()?;
 
+        let this = Self {
+            pwd,
+            host,
+            user,
+            ..self
+        };
+        screen.reset(&this)?;
+
+        Ok(this)
+    }
+
+    pub fn cd<P: AsRef<Path>>(&mut self, to: P) -> io::Result<()> {
+        let to = to.as_ref()
+            .canonicalize()?;
+        env::set_current_dir(&to)?;
+        self.pwd = to;
         Ok(())
     }
 }

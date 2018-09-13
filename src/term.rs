@@ -11,17 +11,18 @@ use crossterm::{
 use std::fmt;
 use std::io::Write;
 use std::str;
+use crate::st;
 
 pub trait Term: Write + Sized {
     fn cursor(&self) -> cursor::TerminalCursor;
     fn terminal(&self) -> terminal::Terminal;
 
-    fn reset(&mut self, prompt: &str) -> Result<(), Error> {
+    fn reset(&mut self, state: &st::State) -> Result<(), Error> {
         let cursor = self.cursor();
         let term = self.terminal();
         term.clear(ClearType::All);
         cursor.goto(0,0);
-        self.prompt(prompt)
+        self.prompt(state)
     }
 
     fn newline(&mut self) -> Result<(), Error> {
@@ -74,8 +75,14 @@ pub trait Term: Write + Sized {
         Ok(())
     }
 
-    fn prompt(&mut self, prompt: &str) -> Result<(), Error> {
-        self.write(prompt.as_bytes())?;
+    fn prompt(&mut self, state: &st::State) -> Result<(), Error> {
+        let term = self.terminal();
+        term.write(&state.user);
+        term.write('@');
+        term.write(&state.host);
+        term.write(':');
+        term.write(state.pwd.display());
+        term.write(" % ");
         self.flush()?;
         Ok(())
     }

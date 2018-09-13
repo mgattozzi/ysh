@@ -1,7 +1,7 @@
 #![feature(crate_visibility_modifier)]
 
 use std::{
-    io,
+    io::{self, Write},
     str,
     process::exit,
 };
@@ -12,7 +12,6 @@ use crossterm::{
     Screen,
     input,
 };
-use std::io::Write;
 use duct::cmd;
 
 mod ast;
@@ -29,22 +28,18 @@ use self::{
 fn main() {
     // Put it in raw mode
     let mut screen = Screen::new(true);
-    let mut state = st::State::new();
-
-    state.init(&mut screen).unwrap_or_else(|e| {
-        eprintln!("{}", e);
-        exit(1);
-    });
-
-    state.run(screen).unwrap_or_else(|e| {
-        eprintln!("{}", e);
-        exit(1);
-    });
+    st::State::default()
+        .init(&mut screen)
+        .and_then(move |mut state| state.run(screen))
+        .unwrap_or_else(|e| {
+            eprintln!("{}", e);
+            exit(1);
+        });
 }
 
 impl st::State {
     // TODO(eliza): move this out of the main module?
-    fn run(&mut self, mut screen: Screen) -> Result<(), Error> {
+    pub fn run(&mut self, mut screen: Screen) -> Result<(), Error> {
         let mut line = Vec::new();
         loop {
             let stdin = input(&screen);
@@ -64,8 +59,16 @@ impl st::State {
                             // TODO(eliza): handle parse errors!
                             continue;
                         },
-                        Ok(Cmd::Builtin(Builtin::Clear)) => { screen.reset(&self.prompt)?; },
-                        Ok(Cmd::Builtin(Builtin::Cd(_))) => unimplemented!("cd doesnt work yet"),
+                        Ok(Cmd::Builtin(Builtin::Clear)) => { screen.reset(&self)?; },
+                        Ok(Cmd::Builtin(Builtin::Cd(to))) => {
+                            screen.newline()?;
+                            self.cd(to)
+                                .or_else(|e| {
+                                    screen.error("cd", &e)
+                                })?;
+
+                            screen.prompt(&self)?;
+                        },
                         Ok(Cmd::Invoke(ref c)) => {
                             screen.newline()?;
                             cmd(c.command, c.args.clone())
@@ -94,7 +97,7 @@ impl st::State {
                                     }
                                 })?;
 
-                            screen.prompt(&self.prompt)?;
+                            screen.prompt(&self)?;
                         }
                     }
                     line.clear();
@@ -110,5 +113,4 @@ impl st::State {
         }
         Ok(())
     }
-
 }
