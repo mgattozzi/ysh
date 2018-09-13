@@ -1,6 +1,4 @@
 //! Utility functions to manipulate the terminal and cursor
-
-use super::st::STATE;
 use failure::{
     format_err,
     Error
@@ -8,74 +6,87 @@ use failure::{
 use crossterm::{
     Screen,
     cursor,
-    terminal::terminal,
-    terminal::ClearType,
+    terminal::{self, ClearType},
 };
 use std::fmt;
 use std::io::Write;
 use std::str;
 
-pub fn reset(screen: &mut Screen) -> Result<(), Error> {
-    let cursor = cursor(&screen);
-    let term = terminal(&screen);
-    term.clear(ClearType::All);
-    cursor.goto(0,0);
-    prompt(screen)?;
-    Ok(())
-}
+pub trait Term: Write + Sized {
+    fn cursor(&self) -> cursor::TerminalCursor;
+    fn terminal(&self) -> terminal::Terminal;
 
-pub fn newline(screen: &mut Screen) -> Result<(), Error> {
-    screen.write(b"\r\n")?;
-    screen.flush()?;
-    Ok(())
-}
-
-pub fn backspace(screen: &mut Screen) -> Result<(), Error> {
-    let mut cursor = cursor(&screen);
-    let term = terminal(&screen);
-    cursor.move_left(1);
-    term.clear(ClearType::UntilNewLine);
-    Ok(())
-}
-
-pub fn not_found(screen: &mut Screen, command: &str) -> Result<(), Error> {
-    screen.write(format!("ysh: command not found: {}", command).as_bytes())?;
-    newline(screen)?;
-    screen.flush()?;
-    Ok(())
-}
-
-pub fn error<P, E>(
-    screen: &mut Screen,
-    prefix: P,
-    error: E,
-) -> Result<(), Error>
-where
-    P: fmt::Display,
-    E: fmt::Display,
-{
-    screen.write(format!("{}: {}", prefix, error).as_bytes())?;
-    newline(screen)?;
-    screen.flush()?;
-    Ok(())
-}
-
-pub fn command_output(screen: &mut Screen, out: &Vec<u8>) -> Result<(), Error> {
-    #[cfg(unix)]
-    for i in str::from_utf8(out)?.lines() {
-        screen.write(i.as_bytes())?;
-        newline(screen)?;
+    fn reset(&mut self, prompt: &str) -> Result<(), Error> {
+        let cursor = self.cursor();
+        let term = self.terminal();
+        term.clear(ClearType::All);
+        cursor.goto(0,0);
+        self.prompt(prompt)
     }
 
-    #[cfg(windows)]
-    screen.write(out)?;
+    fn newline(&mut self) -> Result<(), Error> {
+        self.write(b"\r\n")?;
+        self.flush()?;
+        Ok(())
+    }
 
-    screen.flush()?;
-    Ok(())
+    fn backspace(&mut self) -> Result<(), Error> {
+        let mut cursor = self.cursor();
+        let term = self.terminal();
+        cursor.move_left(1);
+        term.clear(ClearType::UntilNewLine);
+        Ok(())
+    }
+
+    fn not_found(&mut self, command: &str) -> Result<(), Error> {
+        self.write(format!("ysh: command not found: {}", command).as_bytes())?;
+        self.newline()?;
+        self.flush()?;
+        Ok(())
+    }
+
+    fn error<P, E>(
+        &mut self,
+        prefix: P,
+        error: E,
+    ) -> Result<(), Error>
+    where
+        P: fmt::Display,
+        E: fmt::Display,
+    {
+        self.write(format!("{}: {}", prefix, error).as_bytes())?;
+        self.newline()?;
+        self.flush()?;
+        Ok(())
+    }
+
+    fn command_output(&mut self, out: &Vec<u8>) -> Result<(), Error> {
+        #[cfg(unix)]
+        for i in str::from_utf8(out)?.lines() {
+            self.write(i.as_bytes())?;
+            self.newline()?;
+        }
+
+        #[cfg(windows)]
+        self.write(out)?;
+
+        self.flush()?;
+        Ok(())
+    }
+
+    fn prompt(&mut self, prompt: &str) -> Result<(), Error> {
+        self.write(prompt.as_bytes())?;
+        self.flush()?;
+        Ok(())
+    }
+
 }
 
-pub fn prompt(screen: &mut Screen) -> Result<(), Error> {
-    screen.write(STATE.prompt.read().map_err(|_| format_err!("Poisoned Lock"))?.as_bytes())?;
-    screen.flush()?;
-    Ok(())
+impl Term for Screen {
+    fn cursor(&self) -> cursor::TerminalCursor {
+        cursor(self)
+    }
+    fn terminal(&self) -> terminal::Terminal {
+        terminal::terminal(self)
+    }
 }

@@ -1,16 +1,15 @@
 //! Functions and types dealing with the `State` of the shell
 use std::{
     env,
-    sync::RwLock,
+    fmt::Write,
 };
 use crossterm::Screen;
-use super::term;
+use super::term::Term;
 use failure::{
     bail,
     format_err,
     Error,
 };
-use lazy_static::lazy_static;
 
 #[cfg(unix)]
 use std::fs;
@@ -21,40 +20,34 @@ use winapi::um::winbase::{
     GetUserNameA,
 };
 
-lazy_static! {
-    pub static ref STATE: State = State::new();
-}
-
 pub struct State {
-    pub prompt: RwLock<String>,
+    pub prompt: String,
 }
 
 impl State {
     pub fn new() -> Self {
         Self {
-            prompt: RwLock::new(String::new()),
+            prompt: String::new(),
         }
     }
-}
 
-pub fn init(mut screen: &mut Screen) -> Result<(), Error> {
-    let host = hostname()?;
-    let user = user()?;
-    env::set_var("HOST", &host);
-    env::set_var("USER", &user);
 
-    // We need to drop the write lock here so that the terminal can print out the prompt
-    {
-        let mut prompt = STATE.prompt.write().map_err(|_| format_err!("Poisoned Lock"))?;
-        prompt.push_str(&user);
-        prompt.push('@');
-        prompt.push_str(&host);
-        prompt.push_str(" % ");
+    pub fn init(&mut self, screen: &mut Screen) -> Result<(), Error> {
+        let host = hostname()?;
+        let user = user()?;
+        env::set_var("HOST", &host);
+        env::set_var("USER", &user);
+        write!(
+            &mut self.prompt,
+            "{user}@{host} % ",
+            user = user,
+            host = host,
+        )?;
+
+        screen.reset(&self.prompt)?;
+
+        Ok(())
     }
-
-    term::reset(&mut screen)?;
-
-    Ok(())
 }
 
 /// Gets the hostname of the machine running the shell.
