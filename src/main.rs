@@ -15,6 +15,7 @@ use crossterm::{
 use duct::cmd;
 
 mod ast;
+mod env;
 mod term;
 mod st;
 mod parse;

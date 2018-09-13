@@ -20,18 +20,12 @@ pub enum CdError {
     NoPath,
 }
 
-#[derive(Clone, Debug)]
-pub struct WithEnv<'a> {
-    cmd: ast::Cmd<'a>,
-    // TODO(eliza): what kind of fucked up iterator is the env going to be?
-}
-
 // ===== impl Builtin =====
 
 impl<'a> Parse<'a> for Builtin<'a> {
     type Error = CdError;
-    fn parse_from(s: &'a str) -> Result<Self, ParseError<Self::Error>> {
-        let mut args = s.trim().split_whitespace();
+    fn parse_from(text: &'a str) -> Result<Self, ParseError<Self::Error>> {
+        let mut args = super::ArgsIter { text };
         match args.next().ok_or(ParseError::NoInput)? {
             "clear" => Ok(Builtin::Clear),
             "cd" => {
