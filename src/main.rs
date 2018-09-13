@@ -1,6 +1,7 @@
 #![feature(crate_visibility_modifier)]
 
 use std::{
+    io,
     str,
     process::exit,
 };
@@ -79,7 +80,14 @@ fn run(mut screen: Screen) -> Result<(), Error> {
                                 }
                                 Ok(())
                             })
-                            .or_else(|_: Error| term::not_found(&mut screen, &c.command.to_string_lossy()))?;
+                            .or_else(|err: Error| if err.find_root_cause()
+                                .downcast_ref::<io::Error>()
+                                .iter()
+                                .any(|e| e.kind() == io::ErrorKind::NotFound) {
+                                    term::not_found(&mut screen, &c.command.to_string_lossy())
+                                } else {
+                                    term::error(&mut screen, "ysh", err)
+                                })?;
 
                         term::prompt(&mut screen)?;
                     }
