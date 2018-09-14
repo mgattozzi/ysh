@@ -12,7 +12,6 @@ use crossterm::{
     Screen,
     input,
 };
-use duct::cmd;
 
 mod ast;
 mod env;
@@ -22,7 +21,8 @@ mod parse;
 
 use self::{
     parse::Parse,
-    ast::{Cmd, Builtin},
+    ast::{WithEnv, Cmd, Builtin},
+    env::EnvVar,
     term::Term,
 };
 
@@ -55,53 +55,53 @@ impl st::State {
                     }
                 },
                 '\u{000D}' /* Enter */ => {
-                    match Cmd::parse_from(str::from_utf8(&line)?) {
-                        Err(e) => {
-                            // TODO(eliza): handle parse errors!
-                            continue;
-                        },
-                        Ok(Cmd::Builtin(Builtin::Clear)) => { screen.reset(&self)?; },
-                        Ok(Cmd::Builtin(Builtin::Cd(to))) => {
-                            screen.newline()?;
-                            self.cd(to)
-                                .or_else(|e| {
-                                    screen.error("cd", &e)
-                                })?;
+                    if let Ok(WithEnv { env, cmd }) = WithEnv::parse_from(str::from_utf8(&line)?) {
+                        match cmd {
+                            Cmd::Builtin(Builtin::Clear) => { screen.reset(&self)?; },
+                            Cmd::Builtin(Builtin::Cd(to)) => {
+                                screen.newline()?;
+                                self.cd(to)
+                                    .or_else(|e| {
+                                        screen.error("cd", &e)
+                                    })?;
 
-                            screen.prompt(&self)?;
-                        },
-                        Ok(Cmd::Invoke(ref c)) => {
-                            screen.newline()?;
-                            cmd(c.command, c.args.clone())
-                                .unchecked()
-                                .stdout_capture()
-                                .stderr_capture()
-                                .run()
-                                .map_err(Into::into)
-                                .and_then(|exec| {
-                                    if &exec.stdout != b"" {
-                                        screen.command_output(&exec.stdout)?;
-                                    } else if &exec.stderr != b"" {
-                                        screen.command_output(&exec.stderr)?;
-                                    }
-                                    Ok(())
-                                })
-                                .or_else(|err: Error| {
-                                    if err.find_root_cause()
-                                        .downcast_ref::<io::Error>()
-                                        .iter()
-                                        .any(|e| e.kind() == io::ErrorKind::NotFound)
-                                    {
-                                        screen.not_found(&c.command.to_string_lossy())
-                                    } else {
-                                        screen.error("ysh", err)
-                                    }
-                                })?;
+                                screen.prompt(&self)?;
+                            },
+                            Cmd::Invoke(ref c) => {
+                                screen.newline()?;
+                                let command = duct::cmd(c.command, c.args.clone())
+                                    .unchecked()
+                                    .stdout_capture()
+                                    .stderr_capture();
+                                env.fold(command, |c, EnvVar { key, value } | c.env(key, value))
+                                    .run()
+                                    .map_err(Into::into)
+                                    .and_then(|exec| {
+                                        if &exec.stdout != b"" {
+                                            screen.command_output(&exec.stdout)?;
+                                        } else if &exec.stderr != b"" {
+                                            screen.command_output(&exec.stderr)?;
+                                        }
+                                        Ok(())
+                                    })
+                                    .or_else(|err: Error| {
+                                        if err.find_root_cause()
+                                            .downcast_ref::<io::Error>()
+                                            .iter()
+                                            .any(|e| e.kind() == io::ErrorKind::NotFound)
+                                        {
+                                            screen.not_found(&c.command.to_string_lossy())
+                                        } else {
+                                            screen.error("ysh", err)
+                                        }
+                                    })?;
 
-                            screen.prompt(&self)?;
-                        }
+                                screen.prompt(&self)?;
+                            }
+                        };
+                        line.clear();
                     }
-                    line.clear();
+
                 },
                 // Only printable ASCII characters
                 c if c as u8 >= 32 && c as u8 <= 126 => {
