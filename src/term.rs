@@ -40,7 +40,7 @@ pub trait Term: Write + Sized {
     }
 
     fn not_found(&mut self, command: &str) -> Result<(), Error> {
-        self.write(format!("ysh: command not found: {}", command).as_bytes())?;
+        write!(self, "ysh: command not found: {}", command)?;
         self.newline()?;
         self.flush()?;
         Ok(())
@@ -55,8 +55,7 @@ pub trait Term: Write + Sized {
         P: fmt::Display,
         E: fmt::Display,
     {
-        self.write(format!("{}: {}", prefix, error).as_bytes())?;
-        self.newline()?;
+        write!(self, "{}: {}\n", prefix, error)?;
         self.flush()?;
         Ok(())
     }
@@ -76,13 +75,11 @@ pub trait Term: Write + Sized {
     }
 
     fn prompt(&mut self, state: &st::State) -> Result<(), Error> {
-        let term = self.terminal();
-        term.write(&state.user);
-        term.write('@');
-        term.write(&state.host);
-        term.write(':');
-        term.write(state.pwd.display());
-        term.write(" % ");
+        write!(self, "{user}@{host}:{pwd} % ",
+            user = state.user,
+            host = state.host,
+            pwd = state.pwd.display()
+        )?;
         self.flush()?;
         Ok(())
     }
