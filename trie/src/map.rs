@@ -36,7 +36,7 @@ where
     }
 }
 
-struct Iter<'trie, K, V, S, Q>
+pub struct Iter<'trie, K, V, S, Q>
 where
     K: Hash + Eq,
     S: hash::BuildHasher,
@@ -63,13 +63,14 @@ where
     S: hash::BuildHasher + Clone,
 {
 
-    // fn prefix_matches<I>(&self, prefix: I) -> Option<impl Iterator<Item = I>>
-    // where
-    //     I: IntoIterator<Item = K> + FromIterator<K>,
-    // {
-    //     let prefix_root = self.get_node(prefix.into_iter())?;
-    //     prefix_root.children().flat_map(Node::children)
-    // }
+    pub fn prefix_matches<'q, 'trie, I, Q: 'q>(&'trie self, prefix: I) -> Option<Iter<'trie, K, V, S, I>>
+    where
+        I: IntoIterator<Item = &'q Q> + FromIterator<&'trie K>,
+        K: Borrow<Q>,
+        Q: Hash + Eq,
+    {
+        self.get_node(&mut prefix.into_iter()).map(Node::iter)
+    }
 
     fn get_node<'q, I, Q: 'q>(&self, key: &mut I) -> Option<&Node<K, V, S>>
     where
@@ -239,7 +240,7 @@ mod test {
     use super::*;
 
     #[test]
-    fn iter_keys() {
+    fn iter() {
         let words = &["about", "abbot", "abelian", "alphabet", "alcazar", "crawfish", "crawdad", "crazy"];
         let mut trie: TrieMap<char, usize> = TrieMap::new();
 
@@ -252,4 +253,16 @@ mod test {
             assert_eq!(i, j);
         }
     }
+
+    // #[test]
+    // fn prefix_matches() {
+    //     let words = &["about", "abbot", "abelian", "alphabet", "alcazar", "crawfish", "crawdad", "crazy"];
+    //     let mut trie: TrieMap<char, ()> = TrieMap::new();
+
+    //     for (i, word) in words.iter().enumerate() {
+    //         trie.insert(word.chars(), ());
+    //     }
+
+    //     assert_eq!(trie.prefix_matches("ab".to_owned().chars()).collect::<Vec<_>>(), vec![ "out", "bot", "elian"]);
+    // }
 }
