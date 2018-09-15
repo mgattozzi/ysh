@@ -6,10 +6,10 @@ use std::collections::HashMap;
 
 fn keys() -> Vec<String> {
     let mut keys = Vec::new();
-    for a in 1..=26 {
-        for b in 1..=26 {
-            for c in 1..=26 {
-                for d in 1..=26 {
+    for a in 1..10 {
+        for b in 1..10 {
+            for c in 1..10 {
+                for d in 1..10 {
                     keys.push(format!("{}{}{}{}", a, b, c, d));
                 }
             }
