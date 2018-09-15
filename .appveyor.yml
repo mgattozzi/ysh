@@ -37,5 +37,4 @@ test_script:
 #  autho_token:
 #    secure: 
 #  on:
-
-appveyor_repo_tag: true
+#    appveyor_repo_tag: true
