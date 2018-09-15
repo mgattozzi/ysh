@@ -1,0 +1,58 @@
+language: rust
+sudo: false
+
+# For if we ever want to do a deploy
+#DEPLOY_TO_GITHUB: &DEPLOY_TO_GITHUB
+#  before_deploy:
+#    - git config --local user.name ""
+#    - git config --local user.email ""
+#    - name="-$TRAVIS_TAG-$TARGET"
+#    - mkdir $name
+#    - cp target/$TARGET/release/ $name/
+#    - cp README.md LICENSE-MIT LICENSE-APACHE $name/
+#    - tar czvf $name.tar.gz $name
+#  deploy:
+#    provider: releases
+#    api_key:
+#      secure: 
+#    file_glob: true
+#    file: wasm-pack-$TRAVIS_TAG-$TARGET.tar.gz
+#    skip_cleanup: true
+#    on:
+#      branch: master
+#      condition: $DEPLOY = 1
+#      tags: true
+
+matrix:
+  include:
+
+  # tests pass
+  - env: JOB=test RUST_BACKTRACE=1
+    rust: nightly
+    script:
+    - cargo test
+    - rustup component add rustfmt-preview
+    - cargo fmt --all -- --check
+
+  ## dist linux binary
+  #- env: JOB=dist-linux TARGET=x86_64-unknown-linux-musl DEPLOY=1
+  #  rust: nightly
+  #  before_script: rustup target add $TARGET
+  #  script: cargo build --release --target $TARGET --locked --features vendored-openssl
+  #  addons:
+  #    apt:
+  #      packages:
+  #        - musl-tools
+  #  <<: *DEPLOY_TO_GITHUB
+
+  ## dist OSX binary
+  #- env: JOB=dist-osx MACOSX_DEPLOYMENT_TARGET=10.7 DEPLOY=1 TARGET=x86_64-apple-darwin
+  #  os: osx
+  #  rust: nightly
+  #  script: cargo build --release --target $TARGET --locked
+  #  install: true
+  #  <<: *DEPLOY_TO_GITHUB
+
+notifications:
+  email:
+    on_success: never
