@@ -1,11 +1,6 @@
-use std::{path::Path, str, rc::Rc};
-use failure::{
-    Fail,
-};
-use crate::{
-    ast,
-    parse::{Parse, ParseError},
-};
+use crate::parse::{Parse, ParseError};
+use failure::Fail;
+use std::{path::Path, str};
 
 /// Represents all shell builtins.
 #[derive(Clone, Debug)]
