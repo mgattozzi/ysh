@@ -1,8 +1,5 @@
 //! Utility functions to manipulate the terminal and cursor
-use failure::{
-    format_err,
-    Error
-};
+use failure::Error;
 use crossterm::{
     Screen,
     cursor,

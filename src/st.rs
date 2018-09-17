@@ -1,26 +1,23 @@
 //! Functions and types dealing with the `State` of the shell
+
 use std::{
     env,
-    fmt::Write,
-    io,
+    io::{self, Write},
     path::{Path, PathBuf},
-};
-use crossterm::Screen;
-use super::term::Term;
-use failure::{
-    bail,
-    format_err,
-    Error,
+    str,
 };
 
-#[cfg(unix)]
-use std::fs;
+use crate::{
+    ast::{Builtin, Cmd},
+    parse::Parse,
+    term::Term,
+};
 
+use crossterm::{input, Screen};
+use duct::cmd;
+use failure::{bail, Error};
 #[cfg(windows)]
-use winapi::um::winbase::{
-    GetComputerNameA,
-    GetUserNameA,
-};
+use winapi::um::winbase::{GetComputerNameA, GetUserNameA};
 
 #[derive(Default)]
 pub struct State {
@@ -30,7 +27,6 @@ pub struct State {
 }
 
 impl State {
-
     pub fn init(self, screen: &mut Screen) -> Result<Self, Error> {
         let host = hostname()?;
         let user = user()?;
@@ -50,9 +46,85 @@ impl State {
         Ok(this)
     }
 
+    pub fn run(&mut self, mut screen: Screen) -> Result<(), Error> {
+        let mut line = Vec::new();
+        loop {
+            let stdin = input(&screen);
+            match stdin.read_char()? {
+                // ESC Key
+                '\u{001B}' => break,
+                // Backspace and Delete because on *nix it can send either or to mean the same thing
+                '\u{0008}' | '\u{007F}' => {
+                    if line.len() > 0 {
+                        line.pop();
+                        screen.backspace()?;
+                    }
+                },
+                '\u{000D}' /* Enter */ => {
+                    match Cmd::parse_from(str::from_utf8(&line)?) {
+                        Err(_e) => {
+                            // TODO(eliza): handle parse errors!
+                            continue;
+                        },
+                        Ok(Cmd::Builtin(Builtin::Clear)) => {
+                            screen.reset(&self)?;
+                        },
+                        Ok(Cmd::Builtin(Builtin::Cd(to))) => {
+                            screen.newline()?;
+                            self.cd(to)
+                                .or_else(|e| {
+                                    screen.error("cd", &e)
+                                })?;
+
+                            screen.prompt(&self)?;
+                        },
+                        Ok(Cmd::Invoke(ref c)) => {
+                            screen.newline()?;
+                            cmd(c.command, c.args.clone())
+                                .unchecked()
+                                .stdout_capture()
+                                .stderr_capture()
+                                .run()
+                                .map_err(Into::into)
+                                .and_then(|exec| {
+                                    if &exec.stdout != b"" {
+                                        screen.command_output(&exec.stdout)?;
+                                    } else if &exec.stderr != b"" {
+                                        screen.command_output(&exec.stderr)?;
+                                    }
+                                    Ok(())
+                                })
+                                .or_else(|err: Error| {
+                                    if err.find_root_cause()
+                                        .downcast_ref::<io::Error>()
+                                        .iter()
+                                        .any(|e| e.kind() == io::ErrorKind::NotFound)
+                                    {
+                                        screen.not_found(&c.command.to_string_lossy())
+                                    } else {
+                                        screen.error("ysh", err)
+                                    }
+                                })?;
+
+                            screen.prompt(&self)?;
+                        }
+                    }
+                    line.clear();
+                },
+                // Only printable ASCII characters
+                c if c as u8 >= 32 && c as u8 <= 126 => {
+                    line.push(c as u8);
+                    screen.write(&[c as u8])?;
+                },
+                _ => {}
+            }
+            screen.flush()?;
+        }
+        Ok(())
+    }
+
     pub fn cd<P: AsRef<Path>>(&mut self, to: P) -> io::Result<()> {
-        let to = to.as_ref()
-            .canonicalize()?;
+        let to = to.as_ref().canonicalize()?;
         env::set_current_dir(&to)?;
         self.pwd = to;
         Ok(())
@@ -85,28 +157,32 @@ pub fn hostname() -> Result<String, Error> {
             //  wrapped in blocks.
             //  this is only a problem because linux and mac libc have different
             //  functions for finding errno
-            #[cfg(target_os = "linux")] {
-            if unsafe { *libc::__errno_location() } == libc::ENAMETOOLONG {
-                buf.reserve(buf.capacity());
-                continue;
-            } }
-            #[cfg(target_os = "mac")] {
-            if unsafe { *libc::__error() } == libc::ENAMETOOLONG {
-                buf.reserve(buf.capacity());
-                continue;
-            } }
+            #[cfg(target_os = "linux")]
+            {
+                if unsafe { *libc::__errno_location() } == libc::ENAMETOOLONG {
+                    buf.reserve(buf.capacity());
+                    continue;
+                }
+            }
+            #[cfg(target_os = "mac")]
+            {
+                if unsafe { *libc::__error() } == libc::ENAMETOOLONG {
+                    buf.reserve(buf.capacity());
+                    continue;
+                }
+            }
             unreachable!("gethostname can only fail with ENAMETOOLONG");
         }
         //  gethostname has now succeeded! buf holds the contents of a CStr.
         //  This code will attempt to reinterpret buf as a String in place, so
         //  that no reallocation is required. Performance!
-        break unsafe {std::ffi::CStr::from_ptr(ptr) }.to_str()
+        break unsafe { std::ffi::CStr::from_ptr(ptr) }
+            .to_str()
             .map(|cs| unsafe {
                 buf.set_len(cs.len());
                 buf.shrink_to_fit();
                 String::from_utf8_unchecked(buf)
-            })
-            .or_else(|_| bail!("The hostname is invalid UTF-8"));
+            }).or_else(|_| bail!("The hostname is invalid UTF-8"));
     }
 }
 
@@ -145,7 +221,6 @@ pub fn user() -> Result<String, Error> {
         //  Or fail if it is not
         .or_else(|_| bail!("Username is not UTF-8"))
 }
-
 
 #[cfg(target_family = "windows")]
 pub fn hostname() -> Result<String, Error> {

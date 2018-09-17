@@ -1,7 +1,7 @@
 use std::str;
 
 use crate::parse::{self, Parse, ParseError};
-use crate::env::{EnvIter, EnvVar};
+use crate::env::EnvIter;
 pub mod builtin;
 mod invoke;
 
@@ -79,6 +79,7 @@ impl<'a> Parse<'a> for WithEnv<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::env::EnvVar;
 
     #[test]
     fn without_env() {

@@ -81,7 +81,7 @@ crate type ParseResult<'a, T, E = u32> = IResult<&'a str, T, E>;
 ///
 /// Modify the token parser to skip leading whitespace before acting.
 ///
-/// ```rust,norun
+/// ```rust,ignore
 /// let trimming_token = apply(str::trim_left, token);
 /// trimming_token("  text");
 /// ```

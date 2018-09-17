@@ -1,6 +1,6 @@
 use std::{ffi::OsStr, fmt, str};
 
-use crate::parse::{self, Parse, ParseError};
+use crate::parse::{Parse, ParseError};
 
 /// Invocation of an executable command.
 ///
