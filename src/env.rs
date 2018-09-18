@@ -1,9 +1,6 @@
 //! Manages the set of environment variables for the shell and its jobs.
 
-use super::parse::{
-    apply,
-    keyval,
-};
+use super::token;
 use std::iter::Iterator;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -62,7 +59,7 @@ impl<'a> Iterator for EnvIter<'a> {
     /// The grammar does not permit environment variables to be set after the
     /// command proper has begun.
     fn next(&mut self) -> Option<Self::Item> {
-        apply(str::trim_left, keyval)(self.text)
+        token::trim_left(token::keyval)(self.text)
             .map(|(rem, (key, value))| {
                 self.text = rem;
                 EnvVar::new(key, value)

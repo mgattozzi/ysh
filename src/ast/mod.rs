@@ -1,6 +1,7 @@
 use std::str;
 
-use crate::parse::{self, Parse, ParseError};
+use crate::parse::{Parse, ParseError};
+use crate::token;
 use crate::env::EnvIter;
 pub mod builtin;
 mod invoke;
@@ -17,7 +18,7 @@ impl<'a> std::iter::Iterator for ArgsIter<'a> {
     type Item = &'a str;
     fn next(&mut self) -> Option<Self::Item> {
         //  Use the tokenizer to get a snippet
-        let (rest, span) = parse::apply(str::trim_left, parse::token)(self.text)
+        let (rest, span) = token::trim_left(token::atom)(self.text)
             //  Suppress the errors for now. May be worth investigating so that
             //  the shell can report invalid syntax?
             .ok()?;
