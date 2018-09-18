@@ -14,7 +14,7 @@ sudo: false
 #  deploy:
 #    provider: releases
 #    api_key:
-#      secure: 
+#      secure:
 #    file_glob: true
 #    file: wasm-pack-$TRAVIS_TAG-$TARGET.tar.gz
 #    skip_cleanup: true
@@ -31,8 +31,9 @@ matrix:
     rust: nightly
     script:
     - cargo test
-    - rustup component add rustfmt-preview
-    - cargo fmt --all -- --check
+    # Disable the Rustfmt CI job until we can reformat all the code.
+    # - rustup component add rustfmt-preview
+    # - cargo fmt --all -- --check
 
   ## dist linux binary
   #- env: JOB=dist-linux TARGET=x86_64-unknown-linux-musl DEPLOY=1
