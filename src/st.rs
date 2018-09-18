@@ -1,14 +1,26 @@
 //! Functions and types dealing with the `State` of the shell
-use super::term::Term;
-use crossterm::Screen;
-use failure::{bail, Error};
 use std::{
-    env, io,
+    env,
+    fmt::Write,
+    io,
     path::{Path, PathBuf},
 };
+use crossterm::Screen;
+use super::term::Term;
+use failure::{
+    bail,
+    format_err,
+    Error,
+};
+
+#[cfg(unix)]
+use std::fs;
 
 #[cfg(windows)]
-use winapi::um::winbase::{GetComputerNameA, GetUserNameA};
+use winapi::um::winbase::{
+    GetComputerNameA,
+    GetUserNameA,
+};
 
 #[derive(Default)]
 pub struct State {
@@ -18,6 +30,7 @@ pub struct State {
 }
 
 impl State {
+
     pub fn init(self, screen: &mut Screen) -> Result<Self, Error> {
         let host = hostname()?;
         let user = user()?;
@@ -38,7 +51,8 @@ impl State {
     }
 
     pub fn cd<P: AsRef<Path>>(&mut self, to: P) -> io::Result<()> {
-        let to = to.as_ref().canonicalize()?;
+        let to = to.as_ref()
+            .canonicalize()?;
         env::set_current_dir(&to)?;
         self.pwd = to;
         Ok(())
@@ -71,32 +85,28 @@ pub fn hostname() -> Result<String, Error> {
             //  wrapped in blocks.
             //  this is only a problem because linux and mac libc have different
             //  functions for finding errno
-            #[cfg(target_os = "linux")]
-            {
-                if unsafe { *libc::__errno_location() } == libc::ENAMETOOLONG {
-                    buf.reserve(buf.capacity());
-                    continue;
-                }
-            }
-            #[cfg(target_os = "mac")]
-            {
-                if unsafe { *libc::__error() } == libc::ENAMETOOLONG {
-                    buf.reserve(buf.capacity());
-                    continue;
-                }
-            }
+            #[cfg(target_os = "linux")] {
+            if unsafe { *libc::__errno_location() } == libc::ENAMETOOLONG {
+                buf.reserve(buf.capacity());
+                continue;
+            } }
+            #[cfg(target_os = "mac")] {
+            if unsafe { *libc::__error() } == libc::ENAMETOOLONG {
+                buf.reserve(buf.capacity());
+                continue;
+            } }
             unreachable!("gethostname can only fail with ENAMETOOLONG");
         }
         //  gethostname has now succeeded! buf holds the contents of a CStr.
         //  This code will attempt to reinterpret buf as a String in place, so
         //  that no reallocation is required. Performance!
-        break unsafe { std::ffi::CStr::from_ptr(ptr) }
-            .to_str()
+        break unsafe {std::ffi::CStr::from_ptr(ptr) }.to_str()
             .map(|cs| unsafe {
                 buf.set_len(cs.len());
                 buf.shrink_to_fit();
                 String::from_utf8_unchecked(buf)
-            }).or_else(|_| bail!("The hostname is invalid UTF-8"));
+            })
+            .or_else(|_| bail!("The hostname is invalid UTF-8"));
     }
 }
 
@@ -135,6 +145,7 @@ pub fn user() -> Result<String, Error> {
         //  Or fail if it is not
         .or_else(|_| bail!("Username is not UTF-8"))
 }
+
 
 #[cfg(target_family = "windows")]
 pub fn hostname() -> Result<String, Error> {

@@ -1,6 +1,9 @@
 //! Manages the set of environment variables for the shell and its jobs.
 
-use super::parse::{apply, keyval};
+use super::parse::{
+    apply,
+    keyval,
+};
 use std::iter::Iterator;
 
 #[derive(Clone, Debug, Eq, PartialEq)]

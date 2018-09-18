@@ -1,14 +1,17 @@
 //! Utility functions to manipulate the terminal and cursor
-use crate::st;
+use failure::{
+    format_err,
+    Error
+};
 use crossterm::{
+    Screen,
     cursor,
     terminal::{self, ClearType},
-    Screen,
 };
-use failure::Error;
 use std::fmt;
 use std::io::Write;
 use std::str;
+use crate::st;
 
 pub trait Term: Write + Sized {
     fn cursor(&self) -> cursor::TerminalCursor;
@@ -18,7 +21,7 @@ pub trait Term: Write + Sized {
         let cursor = self.cursor();
         let term = self.terminal();
         term.clear(ClearType::All);
-        cursor.goto(0, 0);
+        cursor.goto(0,0);
         self.prompt(state)
     }
 
@@ -43,7 +46,11 @@ pub trait Term: Write + Sized {
         Ok(())
     }
 
-    fn error<P, E>(&mut self, prefix: P, error: E) -> Result<(), Error>
+    fn error<P, E>(
+        &mut self,
+        prefix: P,
+        error: E,
+    ) -> Result<(), Error>
     where
         P: fmt::Display,
         E: fmt::Display,
@@ -79,6 +86,7 @@ pub trait Term: Write + Sized {
         self.flush()?;
         Ok(())
     }
+
 }
 
 impl Term for Screen {

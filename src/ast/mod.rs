@@ -1,7 +1,7 @@
 use std::str;
 
-use crate::env::EnvIter;
 use crate::parse::{self, Parse, ParseError};
+use crate::env::{EnvIter, EnvVar};
 pub mod builtin;
 mod invoke;
 
@@ -10,7 +10,7 @@ pub use self::invoke::Invoke;
 
 #[derive(Debug, Clone)]
 pub struct ArgsIter<'a> {
-    text: &'a str,
+    text: &'a str
 }
 
 impl<'a> std::iter::Iterator for ArgsIter<'a> {
@@ -93,7 +93,7 @@ mod tests {
                 assert_eq!(command, "command");
                 assert_eq!(args.clone().count(), 2);
                 assert_eq!(args.collect::<Vec<_>>(), &["argument", "complex argument"]);
-            }
+            },
         }
     }
 
@@ -107,16 +107,18 @@ mod tests {
         assert_eq!(env.clone().count(), 2);
         assert_eq!(
             env.collect::<Vec<_>>(),
-            vec![("TEST", "1"), ("AUTHOR", "myrrlyn")]
-                .into_iter()
+            vec![("TEST", "1"), ("AUTHOR", "myrrlyn")].into_iter()
                 .map(EnvVar::from)
                 .collect::<Vec<_>>()
         );
         match cmd {
             Cmd::Invoke(_) => panic!("'cd' is a builtin"),
             Cmd::Builtin(Builtin::Cd(path)) => {
-                assert_eq!(path.to_str().expect("source is valid str"), "complex path",);
-            }
+                assert_eq!(
+                    path.to_str().expect("source is valid str"),
+                    "complex path",
+                );
+            },
             Cmd::Builtin(_) => panic!("'cd' is only the builtin 'Cd'"),
         }
     }

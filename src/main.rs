@@ -1,23 +1,28 @@
 #![feature(crate_visibility_modifier)]
 
-use crossterm::{input, Screen};
-use duct::cmd;
-use failure::Error;
 use std::{
     io::{self, Write},
-    process::exit,
     str,
+    process::exit,
 };
+use failure::{
+    Error,
+};
+use crossterm::{
+    Screen,
+    input,
+};
+use duct::cmd;
 
 mod ast;
 mod env;
-mod parse;
-mod st;
 mod term;
+mod st;
+mod parse;
 
 use self::{
-    ast::{Builtin, Cmd},
     parse::Parse,
+    ast::{Cmd, Builtin},
     term::Term,
 };
 
@@ -51,7 +56,7 @@ impl st::State {
                 },
                 '\u{000D}' /* Enter */ => {
                     match Cmd::parse_from(str::from_utf8(&line)?) {
-                        Err(_) => {
+                        Err(e) => {
                             // TODO(eliza): handle parse errors!
                             continue;
                         },

@@ -1,10 +1,21 @@
 //! Collection module for various parsers
-use failure::Fail;
 use nom::{
-    alt, delimited, error_position, tag, take_till1, take_until, take_until1,
-    Err::{Error, Incomplete},
-    ErrorKind::Custom,
     IResult,
+    Err::{
+        Error,
+        Incomplete,
+    },
+    ErrorKind::Custom,
+    alt,
+    delimited,
+    error_position,
+    tag,
+    take_till1,
+    take_until,
+    take_until1,
+};
+use failure::{
+    Fail,
 };
 
 use std::fmt;
@@ -74,10 +85,11 @@ crate type ParseResult<'a, T, E = u32> = IResult<&'a str, T, E>;
 /// let trimming_token = apply(str::trim_left, token);
 /// trimming_token("  text");
 /// ```
-crate fn apply<'a, F, P, R>(func: F, parser: P) -> impl Fn(&'a str) -> ParseResult<'a, R>
+crate fn apply<'a, F, P, R>(func: F, parser: P)
+-> impl Fn(&'a str) -> ParseResult<'a, R>
 where
     F: Fn(&'a str) -> &'a str,
-    P: Fn(&'a str) -> ParseResult<'a, R>,
+    P: Fn(&'a str) -> ParseResult<'a, R>
 {
     move |text: &'a str| parser(func(text))
 }
@@ -103,7 +115,7 @@ crate fn word(text: &str) -> ParseResult<&str> {
         //  our text won't be cut off mid-word
         .or_else(|e| match e {
             Incomplete(_) if text.len() > 0 => Ok(("", text)),
-            e => Err(e),
+            e => Err(e)
         })
 }
 
@@ -139,8 +151,8 @@ crate fn dquote(text: &str) -> ParseResult<&str> {
     let mut iter = text.char_indices();
 
     //  If the first character is not a double quote, abort.
-    if let Some((_, '"')) = iter.next() {
-    } else {
+    if let Some((_, '"')) = iter.next() {}
+    else {
         // trace!("Text provided to dquote did not begin with a double-quote");
         return Err(Error(error_position!(text, Custom('"' as u32))));
     }
@@ -153,7 +165,7 @@ crate fn dquote(text: &str) -> ParseResult<&str> {
             //  output is after the opening quote and before the closing quote,
             //  and the remnant output is after the closing quote. The quotes
             //  themselves are absent from the output.
-            return Ok((&text[i + 1..], &text[1..i]));
+            return Ok((&text[i + 1 ..], &text[1 .. i]));
         }
         //  A backslash unconditionally skips the next character.
         if c == '\\' {
@@ -185,16 +197,15 @@ crate fn dquote(text: &str) -> ParseResult<&str> {
 /// value.
 crate fn keyval(text: &str) -> ParseResult<(&str, &str)> {
     let (rem, key) = take_until1!(text, "=")
-        .and_then(|(r, t)| {
-            word(t).or_else(|e| match e {
-                //  If `word` returns incomplete, then no whitespace was found in
-                //  the span grabbed by `take_until1!`. Therefore, the span is a
-                //  valid word. Replace the Incomplete error with a success value of
-                //  the unmodified input from `and_then`
-                Incomplete(_) => Ok((r, t)),
-                e => Err(e),
-            })
-        }).map(|(_, w)| (&text[w.len()..], w))?;
+        .and_then(|(r, t)| word(t).or_else(|e| match e {
+            //  If `word` returns incomplete, then no whitespace was found in
+            //  the span grabbed by `take_until1!`. Therefore, the span is a
+            //  valid word. Replace the Incomplete error with a success value of
+            //  the unmodified input from `and_then`
+            Incomplete(_) => Ok((r, t)),
+            e => Err(e),
+        }))
+        .map(|(_, w)| (&text[w.len() ..], w))?;
     let (rem, _) = tag!(rem, "=")?;
     let (rem, val) = token(rem)?;
     Ok((rem, (key, val)))
@@ -254,25 +265,22 @@ mod tests {
         let mut cursor = text;
         let mut parts = Vec::new();
         while !cursor.trim().is_empty() {
-            let (rest, part) =
-                apply(str::trim_left, token)(cursor).expect("source text is correct");
+            let (rest, part) = apply(str::trim_left, token)(cursor)
+                .expect("source text is correct");
             parts.push(part);
             cursor = rest;
         }
-        assert_eq!(
-            parts,
-            &[
-                "now",
-                "here",
-                "is",
-                "a",
-                //  dquote
-                r#"hard \"one\""#,
-                "with",
-                //  squote
-                "many parts",
-            ]
-        );
+        assert_eq!(parts, &[
+            "now",
+            "here",
+            "is",
+            "a",
+            //  dquote
+            r#"hard \"one\""#,
+            "with",
+            //  squote
+            "many parts",
+        ]);
     }
 
     #[test]

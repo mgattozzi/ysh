@@ -1,6 +1,6 @@
 use std::{ffi::OsStr, fmt, str};
 
-use crate::parse::{Parse, ParseError};
+use crate::parse::{self, Parse, ParseError};
 
 /// Invocation of an executable command.
 ///
@@ -18,9 +18,15 @@ pub struct Invoke<'a> {
 impl<'a> Parse<'a> for Invoke<'a> {
     type Error = String; // this string is never used, it's a placeholder.
     fn parse_from(text: &'a str) -> Result<Self, ParseError<Self::Error>> {
-        let mut args = super::ArgsIter { text };
-        let command = args.next().map(OsStr::new).ok_or(ParseError::NoInput)?;
-        Ok(Invoke { command, args })
+        let mut args = super::ArgsIter { text, };
+        let command = args.next()
+            .map(OsStr::new)
+            .ok_or(ParseError::NoInput)?;
+        Ok(Invoke {
+            command,
+            args,
+        })
+
     }
 }
 
