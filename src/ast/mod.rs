@@ -101,6 +101,7 @@ mod tests {
 
     #[test]
     fn with_env() {
+        use crate::env::EnvVar;
         let text = r#"TEST=1 AUTHOR=myrrlyn cd 'complex path'"#;
         let with_env = WithEnv::parse_from(text).expect("source is correct");
 
