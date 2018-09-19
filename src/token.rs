@@ -82,6 +82,7 @@ pub fn trim_left<'a, T>(
 ///
 /// This token may be one of:
 ///
+/// - a shell meta-sequence (`shell_meta`)
 /// - a double-quoted string (`dquote`)
 /// - a single-quoted string (`squote`)
 /// - a bare word (`word`)
@@ -99,13 +100,17 @@ pub fn trim_left<'a, T>(
 /// ```rust
 /// use ysh::token::{atom, trim_left};
 ///
-/// let (rem, dquo) = trim_left(atom)("\"hello\" 'world' word")
+/// let (rem, dquo) = trim_left(atom)("\"hello\" 'world' ${shell:-1} word")
 ///     .expect("a double-quoted string is a valid atom");
 /// assert_eq!(dquo, "hello");
 ///
 /// let (rem, squo) = trim_left(atom)(rem)
 ///     .expect("a single-quoted string is a valid atom");
 /// assert_eq!(squo, "world");
+///
+/// let (rem, shell) = trim_left(atom)(rem)
+///     .expect("a shell meta-sequence is a valid atom");
+/// assert_eq!(shell, "{shell:-1}");
 ///
 /// let (_, word) = trim_left(atom)(rem)
 ///     .expect("a bare word is a valid atom");
@@ -115,7 +120,7 @@ pub fn atom(text: &str) -> TokenResult {
     use nom::alt;
     //  TODO(myrrlyn): Patch nom to not leak error_position from alt
     use nom::error_position;
-    alt!(text, dquote | squote | word)
+    alt!(text, shell_meta | dquote | squote | word)
 }
 
 /// Finds a bare word.
@@ -234,6 +239,13 @@ pub fn dquote(text: &str) -> TokenResult {
             //  A backslash (U+005C) skips the next character.
             //  TODO(myrrlyn): Make a backslash processor
             '\\' => drop(iter.next()),
+            //  An unescaped dollar sign (U+0024) begins a shell meta-sequence.
+            //  - process the entire sequence, `shell_meta(...)?`
+            //  - take the shell sequence, `.1`
+            //  - iterate over its characters, `.chars()`
+            //  - advance the main iterator for each of them, `.for_each(...)`
+            '$' => shell_meta(&text[i ..])?.1.chars()
+                .for_each(|_| drop(iter.next())),
             //  ALl other characters are uninteresting
             _ => continue,
         }
@@ -277,6 +289,110 @@ pub fn keyval(text: &str) -> TokenResult<(&str, &str)> {
     //  Take the next atom.
     let (rem, val) = atom(rem)?;
     Ok((rem, (key, val)))
+}
+
+/// Finds a shell meta-sequence.
+///
+/// A shell meta-sequence begins with a dollar sign character, `$` (U+0024), and
+/// is followed by one of:
+///
+/// - a parentheses-enclesed sequence, `(text)`, indicating a subshell command
+/// - a brace-enclosed sequence, `{text}`, indicating a variable expansion
+/// - a bare word, `text`, indicating a variable expansion
+///
+/// Shell meta-sequences can create arbitrarily deep recursive structures with
+/// other shell meta-sequences or with double-quoted strings. For example, the
+/// text below nests subshell, variable, and double-quote tokens to demonstrate
+/// that each begins a new sequence which must end before its enveloping
+/// sequence:
+///
+/// ```text
+/// "top $(high "middle $(low ${bottom} low) middle" high) top"
+///                           ^^^^^^^^
+///                     ^^^^^^^^^^^^^^^^^^^
+///             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+///      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/// ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/// ```
+///
+/// The text above tokenizes as shown, and does **not** end the "top"
+/// double-quoted string at the quote before `middle`, nor does it end the
+/// "high" shell meta-sequence at the parenthesis after `low`, etc.
+///
+/// # Usage
+///
+/// Find a bare variable name, like `$foo`.
+///
+/// ```rust
+/// use ysh::token::shell_meta;
+///
+/// let (_, var) = shell_meta("$var")
+///     .expect("bare words are valid");
+/// assert_eq!(var, "var");
+/// ```
+///
+/// Find a more complex variable use, like `${foo}` or `${foo:-default}`.
+///
+/// ```rust
+/// # use ysh::token::shell_meta;
+/// let (_, var) = shell_meta(r#"${var:-"default value"}"#)
+///     .expect("brace sequences are valid");
+/// assert_eq!(var, "{var:-\"default value\"}");
+/// ```
+///
+/// Find a subshell invocation, like `$(command arguments...)`.
+///
+/// ```rust
+/// # use ysh::token::shell_meta;
+/// let (_, shell) = shell_meta("$(cmd $(inner))")
+///     .expect("subshells can have inner subshells or other constructs");
+/// assert_eq!(shell, "(cmd $(inner))");
+/// ```
+pub fn shell_meta(text: &str) -> TokenResult {
+    use nom::tag;
+    use nom::Err;
+    use nom::Needed;
+    let (text, _) = tag!(text, "$")?;
+    let close = match text.clone().chars().next() {
+        Some('(') => ')',
+        Some('{') => '}',
+        //  If no opening punctuation was found, seek a bare word and return it
+        //  directly.
+        Some(_) => return word(text),
+        //  If no characters come after the `$`, then abort as incomplete.
+        None => return Err(Err::Incomplete(Needed::Unknown)),
+    };
+    let mut rem = &text[1 ..];
+    //  Search the text for the end of the meta sequence. Large tokens (dquote,
+    //  squote, and shell_meta) jump the search. This loop is finite: all the
+    //  called tokenizers advance the text, and it will eventually become empty
+    //  and terminate as incomplete.
+    'outer: loop {
+        if rem.trim().is_empty() {
+            return Err(Err::Incomplete(Needed::Unknown));
+        }
+        //  If any of these bulk tokenizers match on the text, fast-forward
+        //  through them.
+        for tokenizer in &[dquote, squote, shell_meta] {
+            if let Ok((rest, _)) = trim_left(tokenizer)(rem) {
+                rem = rest;
+                continue 'outer;
+            }
+        }
+        //  Otherwise inspect the next character
+        match rem.clone().chars().next() {
+            //  If it's the matching closer to the opener found above, return
+            Some(c) if c == close => {
+                let len = text.len() - rem.len();
+                return Ok((&text[len + 1 ..], &text[..= len]));
+            },
+            //  Otherwise, advance the cursor by the UTF-8 length of the char
+            Some(c) => rem = &rem[c.len_utf8() ..],
+            //  If there is no next character, then no terminator was found, and
+            //  the sequence is incomplete.
+            None => return Err(Err::Incomplete(Needed::Unknown)),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -331,6 +447,14 @@ mod tests {
     }
 
     #[test]
+    fn dquote_shell() {
+        let (_, part) = dquote(r#""dquote $(may "nest")""#)
+            .expect("dquote must succeed");
+
+        assert_eq!(part, "dquote $(may \"nest\")");
+    }
+
+    #[test]
     fn dquote_edge() {
         //  must have opening and closing quotes
         assert!(dquote("hello").is_err());
@@ -339,6 +463,28 @@ mod tests {
         assert!(dquote("").is_err());
         //  may be empty inside
         assert!(dquote(r#""""#).is_ok());
+    }
+
+    #[test]
+    fn subshell() {
+        let (_, v) = shell_meta("$var").expect("shell_meta must succeed");
+        assert_eq!(v, "var");
+
+        let (r, v) = shell_meta("${var},").expect("shell_meta must succeed");
+        assert_eq!(v, "{var}");
+        assert_eq!(r, ",");
+
+        let (r, s) = shell_meta("$(subshell),").expect("shell_meta must succeed");
+        assert_eq!(s, "(subshell)");
+        assert_eq!(r, ",");
+    }
+
+    #[test]
+    fn nested_subshell() {
+        let (_, s) = shell_meta("$(cmd \"inner string\")")
+            .expect("shell_meta must succeed");
+
+        assert_eq!(s, "(cmd \"inner string\")");
     }
 
     #[test]
