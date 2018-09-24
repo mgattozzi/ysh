@@ -78,6 +78,9 @@ impl State {
 
                             screen.prompt(&self)?;
                         },
+                        Ok(Cmd::Builtin(Builtin::Exit)) => {
+                            break;
+                        },
                         Ok(Cmd::Invoke(ref c)) => {
                             screen.newline()?;
                             cmd(c.command, c.args.clone())

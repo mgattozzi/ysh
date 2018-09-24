@@ -9,6 +9,7 @@ use crate::parse::{Parse, ParseError};
 pub enum Builtin<'a> {
     Clear,
     Cd(&'a Path),
+    Exit,
 }
 
 #[derive(Clone, Debug, Fail)]
@@ -28,7 +29,10 @@ impl<'a> Parse<'a> for Builtin<'a> {
             "cd" => {
                 let path = args.next().ok_or(CdError::NoPath)?;
                 Ok(Builtin::Cd(Path::new(path)))
-            }
+            },
+            "exit" => {
+                Ok(Builtin::Exit)
+            },
             _ => Err(ParseError::Unrecognized),
         }
     }
