@@ -1,7 +1,4 @@
 //! Main library for operating the shell
-
-#![feature(crate_visibility_modifier)]
-
 pub mod ast;
 pub mod env;
 pub mod line;

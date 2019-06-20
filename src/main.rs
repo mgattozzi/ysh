@@ -1,5 +1,3 @@
-#![feature(crate_visibility_modifier)]
-
 use std::process::exit;
 
 //  main.rs is a different crate than lib.rs, so the `crate` keyword in lib

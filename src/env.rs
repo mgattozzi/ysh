@@ -4,9 +4,9 @@ use super::token;
 use std::iter::Iterator;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-crate struct EnvVar<'a> {
-    crate key: &'a str,
-    crate value: &'a str,
+pub(crate) struct EnvVar<'a> {
+    pub(crate) key: &'a str,
+    pub(crate) value: &'a str,
 }
 
 impl<'a> EnvVar<'a> {
@@ -37,8 +37,8 @@ impl<'a> From<(&'a str, &'a str)> for EnvVar<'a> {
 /// function: a single bare word, a single-quoted string, or a double-quoted
 /// string.
 #[derive(Clone, Debug)]
-crate struct EnvIter<'a> {
-    crate text: &'a str,
+pub(crate) struct EnvIter<'a> {
+    pub(crate) text: &'a str,
 }
 
 impl<'a> EnvIter<'a> {
@@ -59,7 +59,7 @@ impl<'a> Iterator for EnvIter<'a> {
     /// The grammar does not permit environment variables to be set after the
     /// command proper has begun.
     fn next(&mut self) -> Option<Self::Item> {
-        token::trim_left(token::keyval)(self.text)
+        token::trim_start(token::keyval)(self.text)
             .map(|(rem, (key, value))| {
                 self.text = rem;
                 EnvVar::new(key, value)

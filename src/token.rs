@@ -8,7 +8,7 @@
 //! token producers are responsible for semantic analysis of the produced data.
 //!
 //! Note that by default, the tokenizers in this module do not perform any
-//! whitespace trimming on their input. The function `trim_left` can modifiy a
+//! whitespace trimming on their input. The function `trim_start` can modifiy a
 //! tokenizer to produce another tokenizer that trims leading whitespace before
 //! analyzing the text.
 
@@ -40,7 +40,7 @@ pub type TokenResult<'a, T = &'a str, E = u32> = nom::IResult<&'a str, T, E>;
 /// For example, this can be used to make a non-whitespace-trimming tokenizer
 /// trim all leading whitespace before attempting the parse, by changing the
 /// call site from `tokenizer(text)` to
-/// `compose(str::trim_left, tokenizer)(text)`.
+/// `compose(str::trim_start, tokenizer)(text)`.
 ///
 /// # Usage
 ///
@@ -48,7 +48,7 @@ pub type TokenResult<'a, T = &'a str, E = u32> = nom::IResult<&'a str, T, E>;
 /// use std::str;
 /// use ysh::token;
 ///
-/// let (rem, atom) = token::compose(str::trim_left, token::atom)("  'atom'  ")
+/// let (rem, atom) = token::compose(str::trim_start, token::atom)("  'atom'  ")
 ///     .expect("atom will succeed, because the whitespace will be trimmed");
 /// assert_eq!(atom, "atom");
 /// assert_eq!(rem, "  ");
@@ -60,22 +60,22 @@ pub fn compose<'a, T, U, V>(
     move |input: T| tokenizer(modifier(input))
 }
 
-/// Modifies a tokenizer to call `trim_left` on the input before processing it.
+/// Modifies a tokenizer to call `trim_start` on the input before processing it.
 ///
 /// # Usage
 ///
 /// ```rust
 /// use ysh::token;
 ///
-/// let (rem, atom) = token::trim_left(token::atom)("  'an atom'  ")
+/// let (rem, atom) = token::trim_start(token::atom)("  'an atom'  ")
 ///     .expect("atom will succeed, because the whitespace will be trimmed");
 /// assert_eq!(atom, "an atom");
 /// assert_eq!(rem, "  ");
 /// ```
-pub fn trim_left<'a, T>(
+pub fn trim_start<'a, T>(
     tokenizer: impl Fn(&'a str) -> TokenResult<'a, T>,
 ) -> impl Fn(&'a str) -> TokenResult<'a, T> {
-    compose(str::trim_left, tokenizer)
+    compose(str::trim_start, tokenizer)
 }
 
 /// Finds any token element.
@@ -98,21 +98,21 @@ pub fn trim_left<'a, T>(
 /// # Usage
 ///
 /// ```rust
-/// use ysh::token::{atom, trim_left};
+/// use ysh::token::{atom, trim_start};
 ///
-/// let (rem, dquo) = trim_left(atom)("\"hello\" 'world' ${shell:-1} word")
+/// let (rem, dquo) = trim_start(atom)("\"hello\" 'world' ${shell:-1} word")
 ///     .expect("a double-quoted string is a valid atom");
 /// assert_eq!(dquo, "hello");
 ///
-/// let (rem, squo) = trim_left(atom)(rem)
+/// let (rem, squo) = trim_start(atom)(rem)
 ///     .expect("a single-quoted string is a valid atom");
 /// assert_eq!(squo, "world");
 ///
-/// let (rem, shell) = trim_left(atom)(rem)
+/// let (rem, shell) = trim_start(atom)(rem)
 ///     .expect("a shell meta-sequence is a valid atom");
 /// assert_eq!(shell, "{shell:-1}");
 ///
-/// let (_, word) = trim_left(atom)(rem)
+/// let (_, word) = trim_start(atom)(rem)
 ///     .expect("a bare word is a valid atom");
 /// assert_eq!(word, "word");
 /// ```
@@ -374,7 +374,7 @@ pub fn shell_meta(text: &str) -> TokenResult {
         //  If any of these bulk tokenizers match on the text, fast-forward
         //  through them.
         for tokenizer in &[dquote, squote, shell_meta] {
-            if let Ok((rest, _)) = trim_left(tokenizer)(rem) {
+            if let Ok((rest, _)) = trim_start(tokenizer)(rem) {
                 rem = rest;
                 continue 'outer;
             }
@@ -403,10 +403,10 @@ mod tests {
     fn applicative() {
         use std::str;
 
-        compose(str::trim_left, squote)("  'squoted'")
+        compose(str::trim_start, squote)("  'squoted'")
             .expect("squote must succeed");
 
-        trim_left(squote)("  'squoted'")
+        trim_start(squote)("  'squoted'")
             .expect("squote must succeed");
     }
 

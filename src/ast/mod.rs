@@ -18,7 +18,7 @@ impl<'a> std::iter::Iterator for ArgsIter<'a> {
     type Item = &'a str;
     fn next(&mut self) -> Option<Self::Item> {
         //  Use the tokenizer to get a snippet
-        let (rest, span) = token::trim_left(token::atom)(self.text)
+        let (rest, span) = token::trim_start(token::atom)(self.text)
             //  Suppress the errors for now. May be worth investigating so that
             //  the shell can report invalid syntax?
             .ok()?;
@@ -57,8 +57,8 @@ impl<'a> Parse<'a> for Cmd<'a> {
 /// ```
 #[derive(Clone, Debug)]
 pub struct WithEnv<'a> {
-    crate env: EnvIter<'a>,
-    crate cmd: Cmd<'a>,
+    pub(crate) env: EnvIter<'a>,
+    pub(crate) cmd: Cmd<'a>,
 }
 
 impl<'a> Parse<'a> for WithEnv<'a> {
@@ -80,7 +80,6 @@ impl<'a> Parse<'a> for WithEnv<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::env::EnvVar;
 
     #[test]
     fn without_env() {
